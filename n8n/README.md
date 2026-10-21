@@ -29,14 +29,14 @@ flowchart LR
 
 ---
 
-## 🚀 Cómo importarlo en tu VPS de Oracle Cloud (`130.61.96.49`)
+## 🚀 Cómo importarlo en tu VPS de Oracle Cloud (`<IP_DEL_VPS>`)
 
 En tu servidor de producción, n8n corre en Docker Compose dentro de `~/torre-control`.
 
 ### Paso 1: Configurar Credencial de Telegram en n8n
 > ⚠️ **Lección de n8n 2.40:** Al importar por CLI (`n8n import:workflow`), n8n descarta conexiones a credenciales que no existan previamente en la base de datos de n8n.
 
-1. Abre n8n en el navegador: `http://130.61.96.49:5678`
+1. Abre n8n en el navegador: `http://<IP_DEL_VPS>:5678`
 2. Ve a **Credentials** > **Add Credential** > **Telegram API**.
 3. Nómbrala exactamente: `Telegram Bot (JobAutoApply)` (o reutiliza tu credencial existente de Telegram).
 4. Ingresa el `Access Token` provisto por `@BotFather` y guarda.
@@ -45,14 +45,14 @@ En tu servidor de producción, n8n corre en Docker Compose dentro de `~/torre-co
 
 Desde tu terminal local (PowerShell o WSL):
 ```bash
-scp n8n/job_autoapply_pipeline.json ubuntu@130.61.96.49:~/torre-control/workflows/
+scp n8n/job_autoapply_pipeline.json ubuntu@<IP_DEL_VPS>:~/torre-control/workflows/
 ```
 
 ### Paso 3: Importar y Activar el Workflow
 
 Conéctate por SSH a tu VPS:
 ```bash
-ssh ubuntu@130.61.96.49
+ssh ubuntu@<IP_DEL_VPS>
 cd ~/torre-control
 
 # 1. Importar el workflow dentro del contenedor Docker de n8n
@@ -84,11 +84,11 @@ Puedes configurar las siguientes variables en el archivo `.env` de tu n8n en el 
 
 ## 🧪 Cómo probarlo
 
-1. **Desde la interfaz web de n8n (`http://130.61.96.49:5678`):**
+1. **Desde la interfaz web de n8n (`http://<IP_DEL_VPS>:5678`):**
    - Abre el workflow `Job AutoApply · Radar Diario & Asistente Telegram`.
    - Haz clic en **Test workflow** (Ejecutar flujo).
    - Verifica que cada nodo se ilumine en verde y que el mensaje llegue a tu Telegram con los botones interactivos.
 2. **Vía cURL o webhook manual:**
    ```bash
-   curl -X POST http://130.61.96.49:5678/webhook/job-autoapply-trigger
+   curl -X POST http://<IP_DEL_VPS>:5678/webhook/job-autoapply-trigger
    ```
