@@ -1,75 +1,47 @@
-# Job AutoApply — Fases 0, 1, 2 y 3
+# Job AutoApply — Phases 0, 1, 2, and 3
 
-Plataforma integral Next.js con Supabase para datos/autenticación, agregador de vacantes públicas (Remotive & Arbeitnow),
-arquitectura de **IA Híbrida** (Ollama Local en GPU RTX 4060, Claude Sonnet 5.5 y Google Gemini), módulo de auto-llenado ATS (Greenhouse, Lever, Ashby)
-y puente de webhooks para automatizaciones con n8n y Telegram.
+A job application platform built with Next.js and Supabase for data and authentication.
+Designed for job seekers who want to organize opportunities and prepare tailored applications.
+Stack: Next.js, Supabase, and hybrid AI with Ollama, Claude, and Gemini.
 
-## Qué incluye
+[Leer este documento en español](README.es.md).
 
-- Estructura de **Next.js 16** (App Router, Turbopack) con TypeScript y Tailwind CSS.
-- **Autenticación y Sesiones:** Flujo completo de registro, inicio de sesión y callback con Supabase Auth y Middleware de protección de rutas privadas (`/dashboard`, `/dashboard/jobs`, `/dashboard/applications`, `/dashboard/resumes`, `/dashboard/profile`).
-- **Perfil de Candidato (`/dashboard/profile`):** Datos persistentes del candidato (nombre, teléfono, LinkedIn, GitHub, portafolio, ubicación) para rellenado automático de formularios.
-- **Gestión y Carga de CVs:** Interfaz en `/dashboard/resumes` para subir archivos (`.txt`, `.md`), previsualizar, editar y marcar un CV como principal (`es_actual`) con políticas RLS.
-- **Agregador de Vacantes (`/dashboard/jobs`):**
-  - Ingesta automática e idempotente desde feeds públicos abiertos (**Remotive** y **Arbeitnow**) sin API keys.
-  - Detección automática de sistemas ATS (*Greenhouse, Lever, Ashby, Workday, SmartRecruiters*).
-  - Búsqueda reactiva por palabras clave y filtros por modalidad (*100% Remoto* vs *Presencial/Híbrido*) o tipo de ATS.
-  - Ingesta manual de vacantes para registrar ofertas directas de LinkedIn.
-  - Botón de acción directa **"⚡ Postular con IA"** que precarga la oferta seleccionada en el generador.
-- **Seguimiento de Postulaciones (`/dashboard/applications`):**
-  - Registro y guardado de postulaciones adaptadas con CV y carta generados.
-  - Gestión de ciclo de vida con estados (*Borrador*, *Lista para revisión*, *Enviada*, *En Proceso*, *Entrevista*, *Rechazada*, *¡Oferta!*).
-  - Visor modal para inspeccionar y copiar los documentos generados.
-- **Exportador de CV a PDF ATS-Friendly (`components/CvPdfModal.tsx`):**
-  - Visor con estilos tipográficos (ATS Minimalista, Ejecutivo Serif, Clásico).
-  - Formateo de viñetas, secciones semánticas y exportación nativa a PDF (formato Carta) con diseño de una sola columna sin tablas que garantiza máxima puntuación de legibilidad en parsers ATS.
-- **Score de Match ATS & Keyword Analyzer (`lib/ats/matcher.ts` & `components/AtsMatchCard.tsx`):**
-  - Motor determinista de cálculo de concordancia léxica y semántica entre la vacante y el CV adaptado.
-  - Indicador visual interactivo de porcentaje (0-100%), nivel (*Excelente, Bueno, Regular, Bajo*) y desglose por Hard Skills, Soft Skills / Metodologías y Métricas Cuantitativas.
-  - Pestañas de palabras clave coincidentes vs. ausentes (con botón de copia en 1 clic) y sugerencias de optimización inmediata para superar los filtros de contratación.
-- **Asistente Auto-Fill ATS (`lib/worker/ats/filler.ts` & `/api/worker/autofill`):**
-  - Mapeo determinista de campos para Greenhouse, Lever, Ashby y formularios genéricos.
-  - Generador de inyector JavaScript (one-click copy) que dispara eventos reactivos del DOM (`input`/`change`) y resalta campos completados en verde.
-  - Script runner con Playwright (`worker/autoapply-playwright.mjs`) para ejecución automatizada headless/headed desde terminal o VPS.
-- **Extensión de Chrome Manifest V3 (`extension/`):**
-  - Extensión de navegador lista para cargar en Chrome o Edge (`chrome://extensions`).
-  - Detección automática de sistemas ATS (*Greenhouse, Lever, Ashby, Workday* o genéricos).
-  - Autollenado en 1-clic con disparo de eventos nativos de React/HTML5, resaltado visual esmeralda y toast de confirmación en la página.
-  - Almacenamiento local seguro (`chrome.storage.local`) con sincronización directa desde la Web App (`/api/profile`).
-  - Guía de instalación y uso en [`extension/README.md`](extension/README.md).
-- **Puente de Webhooks y Automatización n8n (`app/api/webhooks/n8n/route.ts` & `n8n/`):**
-  - Endpoint protegido por token de webhook (`x-webhook-secret`).
-  - Soporta acciones: `sync_jobs`, `get_pending`, `update_status` y `telegram_digest` (resumen formateado en Markdown para bots de Telegram con enlaces directos para postular con IA).
-  - **Template exportable n8n (`n8n/job_autoapply_pipeline.json`):** Workflow listo para importar en la VPS de Oracle Cloud (n8n v2.40+) con cron diario a las 8:00 AM COT, ingesta automática de vacantes, digest matutino y alertas interactivas a Telegram con teclado inline.
-  - Guía completa de importación paso a paso en [`n8n/README.md`](n8n/README.md).
-- **Navbar reactiva:** Indicador de estado de sesión, correo del usuario, créditos disponibles en tiempo real y navegación fluida.
-- **Arquitectura de IA Tri-Híbrida:**
-  - **Local On-Device ($0 / Offline):** Ollama con `qwen2.5:7b` corriendo en tu GPU local (RTX 4060).
-  - **Nube Primaria:** Claude (`claude-sonnet-5-5`) para máxima calidad editorial.
-  - **Nube Respaldo (Fallback):** Google Gemini (`gemini-2.5-flash`) con cuota gratuita.
-- `supabase/schema.sql` y migraciones en `supabase/migrations/`: tablas `subscriptions`, `profiles`, `resumes`, `job_postings`, `applications` y `ai_generations`, con Row Level Security (RLS) activado, restricciones de saldo no negativo, soporte de auditoría multi-proveedor e índices de rendimiento.
-- `app/api/generate/route.ts`: endpoint resiliente con reserva atómica de créditos (`gt("creditos_disponibles", 0)`) y reembolso automático en fallo para evitar costes indebidos (*anti-TOCTOU*).
-- `app/dashboard/page.tsx`: panel funcional con precarga de vacantes desde el catálogo, selector automático de CV principal, selector de motor de IA, feedback de carga y guardado directo a *Mis Postulaciones*.
+## What it includes
 
-## Cómo arrancarlo
+- **Next.js 16** (App Router, Turbopack), TypeScript, and Tailwind CSS.
+- **Authentication and sessions:** Registration, sign-in, and callback flows with Supabase Auth, plus middleware protecting private routes (`/dashboard`, `/dashboard/jobs`, `/dashboard/applications`, `/dashboard/resumes`, `/dashboard/profile`).
+- **Candidate profile (`/dashboard/profile`):** Persistent candidate details (name, phone, LinkedIn, GitHub, portfolio, and location) for form autofill.
+- **Resume management:** Upload `.txt` and `.md` files, preview and edit them, and set a primary resume (`es_actual`) with RLS policies.
+- **Job aggregator (`/dashboard/jobs`):** Idempotent ingestion from public Remotive and Arbeitnow feeds without API keys; ATS detection for Greenhouse, Lever, Ashby, Workday, and SmartRecruiters; keyword search and filters by work arrangement or ATS; manual job entry; and an action to preload a selected listing into the AI generator.
+- **Application tracking (`/dashboard/applications`):** Save tailored applications with generated resumes and letters, track their lifecycle from draft through offer, and inspect or copy generated documents in a modal.
+- **ATS-friendly PDF resume export (`components/CvPdfModal.tsx`):** Three typography styles, formatted bullets and semantic sections, and native Letter-size PDF export in a single-column, table-free layout.
+- **ATS match score and keyword analyzer (`lib/ats/matcher.ts` and `components/AtsMatchCard.tsx`):** Deterministic lexical and semantic matching between a job listing and tailored resume; an interactive 0–100 score with levels and skill-category breakdowns; matching and missing keyword tabs with one-click copying; and optimization suggestions.
+- **ATS autofill assistant (`lib/worker/ats/filler.ts` and `/api/worker/autofill`):** Deterministic field mapping for Greenhouse, Lever, Ashby, and generic forms; a JavaScript injector that triggers DOM `input` and `change` events and highlights completed fields; and a Playwright runner (`worker/autoapply-playwright.mjs`) for automated headless or headed execution.
+- **Chrome Manifest V3 extension (`extension/`):** Loadable in Chrome or Edge, detects supported ATS forms, autofills with native React/HTML5 events, highlights filled fields and shows an on-page confirmation. Stores data locally in `chrome.storage.local` and syncs directly from the web app through `/api/profile`. See the [extension installation and usage guide](extension/README.md).
+- **n8n webhook and automation bridge (`app/api/webhooks/n8n/route.ts` and `n8n/`):** Webhook-token-protected endpoint supporting `sync_jobs`, `get_pending`, `update_status`, and `telegram_digest`. The exportable `n8n/job_autoapply_pipeline.json` workflow can be imported into n8n and includes scheduled job ingestion, a morning digest, and Telegram alerts. See the [n8n import guide](n8n/README.md).
+- **Reactive navbar:** Session status, user email, available credits in real time, and navigation.
+- **Hybrid AI architecture:** Local Ollama with `qwen2.5:7b`; Claude (`claude-sonnet-5-5`) as the primary cloud provider; and Google Gemini (`gemini-2.5-flash`) as a fallback.
+- `supabase/schema.sql` and migrations in `supabase/migrations/` define `subscriptions`, `profiles`, `resumes`, `job_postings`, `applications`, and `ai_generations`, with RLS, non-negative balance constraints, multi-provider audit support, and performance indexes.
+- `app/api/generate/route.ts` provides resilient generation with atomic credit reservation and automatic refunds on failure.
+- `app/dashboard/page.tsx` provides a dashboard with catalog job preloading, automatic primary resume selection, AI engine selection, loading feedback, and direct saving to *My Applications*.
 
-1. Crea un proyecto en [supabase.com](https://supabase.com) y, en el SQL Editor, ejecuta el contenido de `supabase/schema.sql` (o las migraciones delta en `supabase/migrations/` si ya tenías tablas de fases anteriores: `20260929_audit_remediation.sql`, `20260929_job_aggregator.sql` y `20260929_user_profiles.sql`).
-2. Si vas a usar **Ollama Local**: asegúrate de que Ollama esté corriendo y con el modelo descargado:
+## Getting started
+
+1. Create a project at [supabase.com](https://supabase.com) and run `supabase/schema.sql` in the SQL Editor. If you already have tables from earlier phases, apply the delta migrations in `supabase/migrations/`.
+2. To use local Ollama, make sure it is running and download the model:
    ```bash
    ollama pull qwen2.5:7b
    ```
-3. Copia `.env.example` a `.env.local` y completa las variables de Supabase. Puedes dejar las API keys vacías si solo usas Ollama Local.
-4. Instala dependencias y arranca en desarrollo:
-
+3. Copy `.env.example` to `.env.local` and fill in the Supabase variables. API keys can be left blank when using only local Ollama.
+4. Install dependencies and start the development server:
    ```bash
    npm install
    npm run dev
    ```
+5. Open `http://localhost:3000`. To try local generation, add a test row to `resumes` in Supabase with a valid `user_id` and resume text. Enter its `id` and a job listing on `/dashboard`, choose an AI engine, and select **Generate**.
 
-5. Abre `http://localhost:3000`. Para probar el generador en modo local:
-   - Inserta una fila de prueba en `resumes` desde Supabase con un `user_id` válido y el texto de tu CV.
-   - Pega ese `id` en el panel de `/dashboard` junto con una oferta laboral, selecciona tu motor de IA y haz clic en **Generar**.
+## Deployment
 
-## Despliegue
+The project is ready to deploy on Vercel: connect the repository, add the Supabase and cloud provider (Anthropic / Gemini) environment variables in the project settings, and deploy.
 
-El proyecto está listo para desplegarse en Vercel: conecta el repositorio, agrega las variables de entorno de Supabase y de tu proveedor nube (Anthropic / Gemini) en la configuración del proyecto de Vercel, y despliega.
+## License: MIT
