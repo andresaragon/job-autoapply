@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:extension": "node --test extension/test/matcher.test.mjs",
     "test:extension:e2e": "node extension/test/e2e.mjs"
   },
@@ -31,6 +33,7 @@
     "playwright": "^1.48.2",
     "postcss": "^8.4.39",
     "tailwindcss": "^3.4.4",
-    "typescript": "^5.5.3"
+    "typescript": "^5.5.3",
+    "vitest": "^3.2.7"
   }
 }

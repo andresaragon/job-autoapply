@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -27,3 +32,6 @@ jobs:
       - run: npm run typecheck
 
       - run: npm run test:extension
+
+      # Los tests no usan red ni keys reales (Supabase y proveedores de IA están simulados).
+      - run: npm test
