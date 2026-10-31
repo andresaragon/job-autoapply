@@ -4,6 +4,8 @@ A job application platform built with Next.js and Supabase for data and authenti
 Designed for job seekers who want to organize opportunities and prepare tailored applications.
 Stack: Next.js, Supabase, and hybrid AI with Ollama, Claude, and Gemini.
 
+[![CI](https://github.com/andresaragon/job-autoapply/actions/workflows/ci.yml/badge.svg)](https://github.com/andresaragon/job-autoapply/actions/workflows/ci.yml)
+
 [Leer este documento en español](README.es.md).
 
 ## What it includes
@@ -22,7 +24,7 @@ Stack: Next.js, Supabase, and hybrid AI with Ollama, Claude, and Gemini.
 - **Reactive navbar:** Session status, user email, available credits in real time, and navigation.
 - **Hybrid AI architecture:** Local Ollama with `qwen2.5:7b`; Claude (`claude-sonnet-5-5`) as the primary cloud provider; and Google Gemini (`gemini-2.5-flash`) as a fallback.
 - `supabase/schema.sql` and migrations in `supabase/migrations/` define `subscriptions`, `profiles`, `resumes`, `job_postings`, `applications`, and `ai_generations`, with RLS, non-negative balance constraints, multi-provider audit support, and performance indexes.
-- `app/api/generate/route.ts` provides resilient generation with atomic credit reservation and automatic refunds on failure.
+- `app/api/generate/route.ts` provides resilient generation with atomic credit reservation (SQL RPC `reserve_credit`) and an automatic relative refund on any failure (see [Design decisions](#design-decisions)).
 - `app/dashboard/page.tsx` provides a dashboard with catalog job preloading, automatic primary resume selection, AI engine selection, loading feedback, and direct saving to *My Applications*.
 
 ## Getting started
@@ -40,8 +42,80 @@ Stack: Next.js, Supabase, and hybrid AI with Ollama, Claude, and Gemini.
    ```
 5. Open `http://localhost:3000`. To try local generation, add a test row to `resumes` in Supabase with a valid `user_id` and resume text. Enter its `id` and a job listing on `/dashboard`, choose an AI engine, and select **Generate**.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    U["User (browser)"] --> UI["Next.js App Router<br/>/dashboard · /login"]
+    EXT["Chrome MV3 extension<br/>(assisted autofill)"] -->|GET /api/profile| API
+    UI --> MW["Middleware<br/>(session and private routes)"]
+    UI --> API["Route Handlers /api/*<br/>generate · jobs · applications<br/>profile · worker/autofill · webhooks/n8n"]
+
+    API -->|"session + RLS"| SB[("Supabase<br/>Auth + Postgres")]
+    API -->|"service_role<br/>(server only)"| SB
+    API -->|"rpc reserve_credit /<br/>refund_credit"| SB
+
+    API --> ROUTER{"AI router<br/>auto | ollama | anthropic | gemini"}
+    ROUTER -->|1| OLL["Local Ollama<br/>(GPU, $0)"]
+    ROUTER -->|2| ANT["Claude Sonnet"]
+    ROUTER -->|3 fallback| GEM["Gemini Flash"]
+
+    API --> AGG["Job aggregator<br/>(lib/jobs/aggregator.ts)"]
+    AGG -->|fetch| REM["Remotive"]
+    AGG -->|fetch| ARB["Arbeitnow"]
+
+    N8N["n8n + Telegram<br/>(daily cron)"] -->|"x-webhook-secret"| API
+    WRK["Playwright worker"] -->|"x-worker-secret"| API
+```
+
+**Pure, deterministic modules** (the most tested): `lib/ats/matcher.ts` (ATS score and keywords),
+`lib/worker/ats/filler.ts` (per-ATS field mapping) and `lib/jobs/aggregator.ts` (feed normalization and ATS
+detection). All data access goes through Supabase with RLS; the `service_role` client is only used in server
+routes.
+
+## Design decisions
+
+### Hybrid AI (local → cloud → fallback)
+One prompt and one structured output format (`### CV_ADAPTADO` / `### CARTA_PRESENTACION`), but the provider is
+interchangeable. In `auto` mode it tries **Ollama** on the local GPU first (zero cost, and the resume never leaves
+the machine), then **Claude** (editorial quality) and finally **Gemini** (free quota as a safety net). Each attempt
+fails in isolation and the per-provider errors are returned in `details`. Every generation is audited in
+`ai_generations` (provider and tokens). Ollama is not reachable from Vercel, so production should set
+`DEFAULT_AI_PROVIDER=anthropic|gemini`.
+
+### Credits: no TOCTOU window
+Charging with "read balance → check → write balance" leaves a window where two simultaneous requests see the same
+balance and both pass. Instead:
+
+- **Reserve** before calling the AI with a SQL function (`reserve_credit`): a single
+  `UPDATE … WHERE creditos_disponibles > 0 RETURNING`, atomic in Postgres.
+- **Relative refund** (`refund_credit`, `+1`) if the job does not exist, no provider answers, the model returns an
+  invalid format or an exception is thrown; a balance "read earlier" is never restored.
+- Defense in depth: `CHECK (creditos_disponibles >= 0)` and functions executable only by `service_role`.
+- Covered by concurrency tests (for example 5 simultaneous requests with 3 credits → exactly 3 charges).
+
+### Assisted autofill instead of automatic submission
+The app **fills in** Greenhouse, Lever, Ashby or generic forms (deterministic selectors, `input`/`change` events,
+visual highlighting) but **does not press "Submit"**: the person reviews and submits. This is deliberate: the terms
+of service of many job boards and ATS forbid automated or mass submission, forms include questions and legal
+consents that need human judgement, and an application sent with invented or mis-mapped data is hard to withdraw.
+Assisted mode keeps the time savings without that risk. The prompt also forbids the AI from inventing experience
+that is not in the resume.
+
+## Tests and CI
+
+```bash
+npm test          # Vitest, no network or real keys
+npm run lint && npm run typecheck
+npm run test:extension
+```
+
+The tests simulate Supabase (in-memory fake, `tests/helpers/fakeSupabase.ts`), `fetch` (Remotive/Arbeitnow) and
+the three AI providers. GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci`, lint, typecheck and the tests
+on every push to `main` and every pull request.
+
 ## Deployment
 
-The project is ready to deploy on Vercel: connect the repository, add the Supabase and cloud provider (Anthropic / Gemini) environment variables in the project settings, and deploy.
+The project is ready to deploy on Vercel: connect the repository, add the Supabase and cloud provider (Anthropic / Gemini) environment variables in the project settings, and deploy. A step-by-step guide (Vercel + Supabase, migrations in order, environment variables and the auth callback URL) is in [`docs/DEPLOY.md`](docs/DEPLOY.md), written in Spanish.
 
 ## License: MIT
